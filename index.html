@@ -888,7 +888,7 @@
     <div class="h-actions">
       <input type="file" accept=".csv" id="hdr-file" style="display:none" />
       <button class="btn btn-gold" id="upload-btn">⬆&nbsp; Upload CSV</button>
-      <button class="btn btn-ghost btn-icon" id="theme-btn" title="Toggle theme">🌙</button>
+      <button class="btn btn-ghost btn-icon" id="theme-btn" title="Toggle theme" onclick="toggleTheme()">🌙</button>
     </div>
   </header>
 
@@ -1316,24 +1316,34 @@
       const analysisTop = document.getElementById('analysis-top');
       const byBrokerA = grp(h => h.broker);
       const bySectorA = grp(h => h.sector);
+      const byACa = grp(h => ['Gov Bond', 'Corporate Bond', 'Debt Fund'].includes(h.assetClass) ? 'Fixed income' : h.assetClass === 'ETF' ? 'ETF / Fund' : 'Equity');
       analysisTop.innerHTML = `
     <div class="chart-card">
       <div class="chart-label">Broker allocation</div>
-      <div style="position:relative;height:200px"><canvas id="c-broker-a"></canvas></div>
+      <div style="position:relative;height:220px"><canvas id="c-broker-a"></canvas></div>
       <div class="pie-legend" id="l-broker-a"></div>
     </div>
     <div class="chart-card">
       <div class="chart-label">Sector allocation</div>
-      <div style="position:relative;height:200px"><canvas id="c-sector-a"></canvas></div>
+      <div style="position:relative;height:220px"><canvas id="c-sector-a"></canvas></div>
       <div class="pie-legend" id="l-sector-a"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-label">Asset class breakdown</div>
+      <div style="position:relative;height:220px"><canvas id="c-ac-a"></canvas></div>
+      <div class="pie-legend" id="l-ac-a"></div>
     </div>`;
       destroyChart('broker-a');
-      charts['broker-a'] = new Chart(document.getElementById('c-broker-a'), { type: 'bar', data: { labels: byBrokerA.map(b => b.name), datasets: [{ label: 'Value', data: byBrokerA.map(b => b.value), backgroundColor: byBrokerA.map((_, i) => BP[i % BP.length]), borderWidth: 0, borderRadius: 5 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...tt, callbacks: { label: ctx => ` ₦${fmt(ctx.parsed.y)} · ${(ctx.parsed.y / tv * 100).toFixed(1)}%` } } }, scales: { x: { ticks: { font: { size: 11 }, color: 'var(--t2)' }, grid: { display: false }, border: { display: false } }, y: { ticks: { callback: v => v >= 1000 ? '₦' + (v / 1000).toFixed(0) + 'k' : '₦' + v, font: { size: 10 }, color: 'var(--t3)' }, grid: { color: gridColor() }, border: { display: false } } } } });
+      charts['broker-a'] = new Chart(document.getElementById('c-broker-a'), { type: 'pie', data: { labels: byBrokerA.map(b => b.name), datasets: [{ data: byBrokerA.map(b => b.value), backgroundColor: byBrokerA.map((_, i) => BP[i % BP.length]), borderWidth: 2, borderColor: borderColor(), hoverOffset: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...tt, callbacks: { label: ctx => ` ${ctx.label}: ₦${fmt(ctx.parsed)} (${(ctx.parsed / tv * 100).toFixed(1)}%)` } } } } });
       makePieLegend(document.getElementById('l-broker-a'), byBrokerA, (_, i) => BP[i % BP.length]);
 
       destroyChart('sector-a');
-      charts['sector-a'] = new Chart(document.getElementById('c-sector-a'), { type: 'bar', data: { labels: bySectorA.map(s => s.name), datasets: [{ label: 'Value', data: bySectorA.map(s => s.value), backgroundColor: bySectorA.map(s => SC[s.name] || '#888'), borderWidth: 0, borderRadius: 5 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...tt, callbacks: { label: ctx => ` ₦${fmt(ctx.parsed.y)} · ${(ctx.parsed.y / tv * 100).toFixed(1)}%` } } }, scales: { x: { ticks: { font: { size: 9 }, color: 'var(--t2)', maxRotation: 30 }, grid: { display: false }, border: { display: false } }, y: { ticks: { callback: v => v >= 1000 ? '₦' + (v / 1000).toFixed(0) + 'k' : '₦' + v, font: { size: 10 }, color: 'var(--t3)' }, grid: { color: gridColor() }, border: { display: false } } } } });
+      charts['sector-a'] = new Chart(document.getElementById('c-sector-a'), { type: 'pie', data: { labels: bySectorA.map(s => s.name), datasets: [{ data: bySectorA.map(s => s.value), backgroundColor: bySectorA.map(s => SC[s.name] || '#888'), borderWidth: 2, borderColor: borderColor(), hoverOffset: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...tt, callbacks: { label: ctx => ` ${ctx.label}: ₦${fmt(ctx.parsed)} (${(ctx.parsed / tv * 100).toFixed(1)}%)` } } } } });
       makePieLegend(document.getElementById('l-sector-a'), bySectorA, d => SC[d.name] || '#888');
+
+      destroyChart('ac-a');
+      charts['ac-a'] = new Chart(document.getElementById('c-ac-a'), { type: 'pie', data: { labels: byACa.map(c => c.name), datasets: [{ data: byACa.map(c => c.value), backgroundColor: byACa.map((_, i) => AC_COLORS[i % AC_COLORS.length]), borderWidth: 2, borderColor: borderColor(), hoverOffset: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...tt, callbacks: { label: ctx => ` ${ctx.label}: ₦${fmt(ctx.parsed)} (${(ctx.parsed / tv * 100).toFixed(1)}%)` } } } } });
+      makePieLegend(document.getElementById('l-ac-a'), byACa, (_, i) => AC_COLORS[i % AC_COLORS.length]);
 
       // Top 10 concentration
       destroyChart('top10');
@@ -1456,17 +1466,29 @@
     });
 
     // Theme
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      document.getElementById('theme-btn').textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
     function toggleTheme() {
-      const html = document.documentElement;
-      const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      html.setAttribute('data-theme', next);
-      document.getElementById('theme-btn').textContent = next === 'dark' ? '☀️' : '🌙';
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
       localStorage.setItem('ngx-theme', next);
-      // Redraw charts with new grid colors
+      localStorage.setItem('ngx-theme-manual', '1');
       if (holdings.length) { renderCharts(); renderAnalysis(); }
     }
-    const savedTheme = localStorage.getItem('ngx-theme');
-    if (savedTheme) { document.documentElement.setAttribute('data-theme', savedTheme); document.getElementById('theme-btn').textContent = savedTheme === 'dark' ? '☀️' : '🌙'; }
+    // Auto dark mode: 6pm–7am, unless user has set a preference
+    (function initTheme() {
+      const saved = localStorage.getItem('ngx-theme');
+      const manual = localStorage.getItem('ngx-theme-manual');
+      if (saved && manual) {
+        applyTheme(saved);
+      } else {
+        const h = new Date().getHours();
+        applyTheme(h >= 18 || h < 7 ? 'dark' : 'light');
+      }
+    })();
 
     // File inputs
     function wireFileInput(el) { el.addEventListener('change', e => { handleFile(e.target.files[0]); e.target.value = ''; }); }
